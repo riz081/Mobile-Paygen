@@ -8,6 +8,8 @@ import 'package:flutter_jago_pos_app/core/extensions/int_ext.dart';
 import 'package:flutter_jago_pos_app/core/extensions/string_ext.dart';
 import 'package:flutter_jago_pos_app/data/datasources/auth_local_datasource.dart';
 import 'package:flutter_jago_pos_app/data/models/requests/business_setting_request_model.dart';
+import 'package:flutter_jago_pos_app/data/models/responses/me_response_model.dart';
+import 'package:flutter_jago_pos_app/data/models/responses/product_response_model.dart';
 import 'package:flutter_jago_pos_app/presentation/auth/bloc/account/account_bloc.dart';
 import 'package:flutter_jago_pos_app/presentation/home/bloc/checkout/checkout_bloc.dart';
 import 'package:flutter_jago_pos_app/presentation/home/models/product_model.dart';
@@ -32,15 +34,19 @@ class HomePage extends StatefulWidget {
 
 // Tambahkan widget ini di bagian atas file (di luar class HomePage)
 class StockController extends StatefulWidget {
-  final int initialStock;
-  final ValueChanged<int> onStockChanged;
-  final bool isEditable;
+  final int stock;
+  final int currentQuantity;
+  final Product product;
+  final Outlet? outlet;
+  final Function(int) onQuantityChanged;
 
   const StockController({
     super.key,
-    required this.initialStock,
-    required this.onStockChanged,
-    this.isEditable = true,
+    required this.stock,
+    required this.currentQuantity,
+    required this.product,
+    required this.outlet,
+    required this.onQuantityChanged,
   });
 
   @override
@@ -48,14 +54,14 @@ class StockController extends StatefulWidget {
 }
 
 class _StockControllerState extends State<StockController> {
+  late int _quantity;
   late TextEditingController _controller;
-  late int _currentStock;
 
   @override
   void initState() {
     super.initState();
-    _currentStock = widget.initialStock;
-    _controller = TextEditingController(text: _currentStock.toString());
+    _quantity = widget.currentQuantity;
+    _controller = TextEditingController(text: _quantity.toString());
   }
 
   @override
@@ -64,14 +70,24 @@ class _StockControllerState extends State<StockController> {
     super.dispose();
   }
 
-  void _updateStock(int newStock) {
-    if (newStock < 0) return;
+  void _updateQuantity(int newQuantity) {
+    // Validasi tidak boleh kurang dari 0
+    if (newQuantity < 0) return;
     
+    // Validasi tidak boleh melebihi stok gudang
+    if (newQuantity > widget.stock) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Stok tidak mencukupi"), backgroundColor: AppColors.red),
+      );
+      return;
+    }
+
     setState(() {
-      _currentStock = newStock;
-      _controller.text = newStock.toString();
+      _quantity = newQuantity;
+      _controller.text = newQuantity.toString();
     });
-    widget.onStockChanged(newStock);
+    
+    widget.onQuantityChanged(_quantity);
   }
 
   @override
@@ -81,8 +97,8 @@ class _StockControllerState extends State<StockController> {
       children: [
         IconButton(
           icon: const Icon(Icons.remove, size: 20),
-          onPressed: widget.isEditable
-              ? () => _updateStock(_currentStock - 1)
+          onPressed: _quantity > 0
+              ? () => _updateQuantity(_quantity - 1)
               : null,
           style: IconButton.styleFrom(
             backgroundColor: AppColors.primary.withOpacity(0.1),
@@ -101,17 +117,16 @@ class _StockControllerState extends State<StockController> {
               contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
             ),
             onChanged: (value) {
-              final newStock = int.tryParse(value) ?? _currentStock;
-              _updateStock(newStock);
+              final newQuantity = int.tryParse(value) ?? _quantity;
+              _updateQuantity(newQuantity);
             },
-            enabled: widget.isEditable,
           ),
         ),
         const SpaceWidth(8),
         IconButton(
           icon: const Icon(Icons.add, size: 20),
-          onPressed: widget.isEditable
-              ? () => _updateStock(_currentStock + 1)
+          onPressed: widget.stock > 0 && _quantity < widget.stock
+              ? () => _updateQuantity(_quantity + 1)
               : null,
           style: IconButton.styleFrom(
             backgroundColor: AppColors.primary.withOpacity(0.1),
@@ -123,10 +138,12 @@ class _StockControllerState extends State<StockController> {
   }
 }
 
+
 class _HomePageState extends State<HomePage> {
   double totalPayment = 0;
   int? selectedCategory;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final Map<int, int> _productQuantities = {};
 
   @override
   void initState() {
@@ -272,96 +289,124 @@ class _HomePageState extends State<HomePage> {
                       orElse: () => [],
                       loaded: (data) => data.where((e) => e.chargeType == 'tax').toList(),
                     );
-                    return BlocBuilder<ProductBloc, ProductState>(
-                      builder: (context, productState) {
-                        return productState.maybeWhen(
-                          orElse: () => const Center(child: CircularProgressIndicator()),
-                          loading: () => const Center(child: CircularProgressIndicator()),
+                    return BlocListener<ProductBloc, ProductState>(
+                      listener: (context, state) {
+                        state.maybeWhen(
+                        // Add this block to handle the success case
                           success: (products) {
-                            if (products.isEmpty) {
-                              return Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  const Center(child: Text("No Items")),
-                                  ElevatedButton(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: AppColors.primary,
-                                      minimumSize: const Size(200, 50),
-                                    ),
-                                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CategoryPage())),
-                                    child: const Text("Tambahkan Kategori", style: TextStyle(color: AppColors.white)),
-                                  ),
-                                ],
-                              );
-                            }
-
-                            return ListView.separated(
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
-                              itemBuilder: (context, index) {
-                                final product = products[index];
-                                final stock = product.stocks?.firstWhereOrNull(
-                                  (e) => e.outletId == outletData?.id,
-                                );
-                                return Card(
-                                  color: Colors.white,
-                                  child: ListTile(
-                                    leading: product.image != null
-                                        ? ClipRRect(
-                                            borderRadius: BorderRadius.circular(10),
-                                            child: Image.network(
-                                              product.image!.startsWith('http')
-                                                  ? product.image!
-                                                  : product.image!.startsWith('/storage')
-                                                      ? '${Variables.baseUrl}${product.image!}'
-                                                      : '${Variables.imageBaseUrl}${product.image!}',
-                                              width: 50,
-                                              height: 50,
-                                              fit: BoxFit.cover,
-                                              errorBuilder: (context, error, stackTrace) => Icon(Icons.broken_image),
-                                            ),
-                                          )
-                                        : Container(
-                                            width: 50,
-                                            height: 50,
-                                            decoration: BoxDecoration(
-                                              borderRadius: BorderRadius.circular(10),
-                                              color: changeStringtoColor(product.color ?? ""),
-                                            ),
-                                          ),
-                                    title: Text(product.name ?? "", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-                                    subtitle: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          "Stock Gudang: ${stock?.quantity ?? 0}",
-                                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w400),
-                                        ),
-                                        const SpaceHeight(4),
-                                        StockController(
-                                          initialStock: stock?.quantity ?? 0,
-                                          onStockChanged: (newStock) {
-                                            // Implementasi logika update stock di sini
-                                            // Contoh:
-                                            // context.read<ProductBloc>().add(ProductEvent.updateStock(
-                                            //   productId: product.id!,
-                                            //   outletId: outletData?.id ?? 0,
-                                            //   newStock: newStock,
-                                            // ));
-                                          },
-                                          isEditable: true, // Atau false jika tidak boleh diubah
-                                        ),
-                                      ],
-                                    ),
-                                    trailing: Text(product.price!.currencyFormatRpV3, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-                                  ),
-                                );
-                              },
-                              itemCount: products.length,
-                              separatorBuilder: (_, __) => const SpaceHeight(4),
-                            );
+                            setState(() {
+                              _productQuantities.clear(); // Reset quantity saat produk di-refresh
+                            });
                           },
+                          orElse: () {}, // Do nothing for other states
                         );
                       },
+                      child: BlocBuilder<ProductBloc, ProductState>(
+                        builder: (context, productState) {
+                          return productState.maybeWhen(
+                            orElse: () => const Center(child: CircularProgressIndicator()),
+                            loading: () => const Center(child: CircularProgressIndicator()),
+                            success: (products) {
+                              if (products.isEmpty) {
+                                return Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Center(child: Text("No Items")),
+                                    ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppColors.primary,
+                                        minimumSize: const Size(200, 50),
+                                      ),
+                                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CategoryPage())),
+                                      child: const Text("Tambahkan Kategori", style: TextStyle(color: AppColors.white)),
+                                    ),
+                                  ],
+                                );
+                              }
+
+                              return ListView.separated(
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                itemBuilder: (context, index) {
+                                  final product = products[index];
+                                  final stock = product.stocks?.firstWhereOrNull(
+                                    (e) => e.outletId == outletData?.id,
+                                  );
+                                  return Card(
+                                    color: Colors.white,
+                                    child: ListTile(
+                                      leading: product.image != null
+                                          ? ClipRRect(
+                                              borderRadius: BorderRadius.circular(10),
+                                              child: Image.network(
+                                                product.image!.startsWith('http')
+                                                    ? product.image!
+                                                    : product.image!.startsWith('/storage')
+                                                        ? '${Variables.baseUrl}${product.image!}'
+                                                        : '${Variables.imageBaseUrl}${product.image!}',
+                                                width: 50,
+                                                height: 50,
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (context, error, stackTrace) => Icon(Icons.broken_image),
+                                              ),
+                                            )
+                                          : Container(
+                                              width: 50,
+                                              height: 50,
+                                              decoration: BoxDecoration(
+                                                borderRadius: BorderRadius.circular(10),
+                                                color: changeStringtoColor(product.color ?? ""),
+                                              ),
+                                            ),
+                                      title: Text(product.name ?? "", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+                                      subtitle: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            "Stock Gudang: ${(stock?.quantity ?? 0) - (_productQuantities[product.id] ?? 0)}", // Hitung stok tersedia
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w400,
+                                              color: (stock?.quantity ?? 0) <= 0 ? AppColors.red : null,
+                                            ),
+                                          ),
+                                          const SpaceHeight(4),
+                                          StockController(
+                                            stock: (stock?.quantity ?? 0) - (_productQuantities[product.id] ?? 0) + (_productQuantities[product.id] ?? 0), // Stok asli
+                                            currentQuantity: _productQuantities[product.id] ?? 0, // Quantity saat ini
+                                            product: product,
+                                            outlet: outletData,
+                                            onQuantityChanged: (newQuantity) {
+                                              setState(() {
+                                                _productQuantities[product.id!] = newQuantity; // Update quantity
+                                              });
+                                              
+                                              if (newQuantity > 0) {
+                                                context.read<CheckoutBloc>().add(CheckoutEvent.addToCart(
+                                                  product: product,
+                                                  businessSetting: taxs.cast<BusinessSettingRequestModel>(),
+                                                ));
+                                              } else {
+                                                context.read<CheckoutBloc>().add(CheckoutEvent.removeFromCart(
+                                                  product: product,
+                                                  businessSetting: taxs.cast<BusinessSettingRequestModel>(),
+                                                ));
+                                              }
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                      trailing: Text(product.price!.currencyFormatRpV3, 
+                                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+                                    ),
+                                  );
+                                },
+                                itemCount: products.length,
+                                separatorBuilder: (_, __) => const SpaceHeight(4),
+                              );
+                            },
+                          );
+                        },
+                      ),
                     );
                   },
                 );
