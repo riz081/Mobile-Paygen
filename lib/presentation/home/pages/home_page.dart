@@ -30,16 +30,103 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<Offset> _animation;
-  OverlayEntry? _overlayEntry;
+// Tambahkan widget ini di bagian atas file (di luar class HomePage)
+class StockController extends StatefulWidget {
+  final int initialStock;
+  final ValueChanged<int> onStockChanged;
+  final bool isEditable;
 
-  final GlobalKey cartKey = GlobalKey();
-  bool _isAnimating = false;
+  const StockController({
+    super.key,
+    required this.initialStock,
+    required this.onStockChanged,
+    this.isEditable = true,
+  });
+
+  @override
+  State<StockController> createState() => _StockControllerState();
+}
+
+class _StockControllerState extends State<StockController> {
+  late TextEditingController _controller;
+  late int _currentStock;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentStock = widget.initialStock;
+    _controller = TextEditingController(text: _currentStock.toString());
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _updateStock(int newStock) {
+    if (newStock < 0) return;
+    
+    setState(() {
+      _currentStock = newStock;
+      _controller.text = newStock.toString();
+    });
+    widget.onStockChanged(newStock);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          icon: const Icon(Icons.remove, size: 20),
+          onPressed: widget.isEditable
+              ? () => _updateStock(_currentStock - 1)
+              : null,
+          style: IconButton.styleFrom(
+            backgroundColor: AppColors.primary.withOpacity(0.1),
+            padding: const EdgeInsets.all(4),
+          ),
+        ),
+        const SpaceWidth(8),
+        SizedBox(
+          width: 60,
+          child: TextField(
+            controller: _controller,
+            textAlign: TextAlign.center,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+            ),
+            onChanged: (value) {
+              final newStock = int.tryParse(value) ?? _currentStock;
+              _updateStock(newStock);
+            },
+            enabled: widget.isEditable,
+          ),
+        ),
+        const SpaceWidth(8),
+        IconButton(
+          icon: const Icon(Icons.add, size: 20),
+          onPressed: widget.isEditable
+              ? () => _updateStock(_currentStock + 1)
+              : null,
+          style: IconButton.styleFrom(
+            backgroundColor: AppColors.primary.withOpacity(0.1),
+            padding: const EdgeInsets.all(4),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _HomePageState extends State<HomePage> {
   double totalPayment = 0;
-
   int? selectedCategory;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   void initState() {
@@ -49,61 +136,12 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     context.read<CategoryBloc>().add(const CategoryEvent.getCategories());
     context.read<BusinessSettingBloc>().add(const BusinessSettingEvent.getBusinessSetting());
 
-    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 500));
-
     AuthLocalDatasource().getPrinter().then((value) async {
       if (value != null) {
         await PrintBluetoothThermal.connect(macPrinterAddress: value.macAddress ?? "");
       }
     });
   }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _startAnimation(BuildContext context, GlobalKey buttonKey, Widget image) {
-    if (_isAnimating) return;
-
-    final RenderBox buttonBox = buttonKey.currentContext!.findRenderObject() as RenderBox;
-    final RenderBox cartBox = cartKey.currentContext!.findRenderObject() as RenderBox;
-    final Offset buttonPosition = buttonBox.localToGlobal(Offset.zero);
-    final Offset cartPosition = cartBox.localToGlobal(Offset.zero);
-
-    _animation = Tween<Offset>(
-      begin: buttonPosition,
-      end: cartPosition,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
-
-    _overlayEntry = _createFloatingIcon(buttonPosition, image);
-    Overlay.of(context).insert(_overlayEntry!);
-
-    setState(() => _isAnimating = true);
-
-    _controller.forward().then((_) {
-      _overlayEntry?.remove();
-      setState(() {
-        _isAnimating = false;
-        _controller.reset();
-      });
-    });
-  }
-
-  OverlayEntry _createFloatingIcon(Offset startPosition, Widget image) {
-    return OverlayEntry(
-      builder: (context) => AnimatedBuilder(
-        animation: _controller,
-        builder: (_, child) {
-          final offset = Offset(_animation.value.dx, _animation.value.dy);
-          return Positioned(top: offset.dy, left: offset.dx, child: image);
-        },
-      ),
-    );
-  }
-
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   Widget build(BuildContext context) {
@@ -145,7 +183,6 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
               Navigator.push(context, MaterialPageRoute(builder: (_) => const CheckoutPage()));
             },
             child: Container(
-              key: cartKey,
               height: 80,
               width: double.infinity,
               margin: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
@@ -265,66 +302,57 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                                 final stock = product.stocks?.firstWhereOrNull(
                                   (e) => e.outletId == outletData?.id,
                                 );
-                                GlobalKey buttonKey = GlobalKey();
-                                return InkWell(
-                                  key: buttonKey,
-                                  onTap: () async {
-                                    if (stock == null || stock.quantity == null || stock.quantity! <= 0) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(content: Text("Stok Habis"), backgroundColor: AppColors.red),
-                                      );
-                                      return;
-                                    }
-                                    _startAnimation(
-                                      context,
-                                      buttonKey,
-                                      Container(
-                                        width: 50,
-                                        height: 50,
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(10),
-                                          color: changeStringtoColor(product.color ?? ""),
-                                        ),
-                                      ),
-                                    );
-                                    await Future.delayed(const Duration(milliseconds: 700));
-                                    context.read<CheckoutBloc>().add(
-                                          CheckoutEvent.addToCart(product: product, businessSetting: taxs.cast<BusinessSettingRequestModel>()),
-                                        );
-                                  },
-                                  child: Card(
-                                    color: Colors.white,
-                                    child: ListTile(
-                                      leading: product.image != null
-                                          ? ClipRRect(
-                                              borderRadius: BorderRadius.circular(10),
-                                              child: Image.network(
-                                                product.image!.startsWith('http')
-                                                    ? product.image!
-                                                    : product.image!.startsWith('/storage')
-                                                        ? '${Variables.baseUrl}${product.image!}'
-                                                        : '${Variables.imageBaseUrl}${product.image!}',
-                                                width: 50,
-                                                height: 50,
-                                                fit: BoxFit.cover,
-                                                errorBuilder: (context, error, stackTrace) => Icon(Icons.broken_image),
-                                              ),
-                                            )
-                                          : Container(
+                                return Card(
+                                  color: Colors.white,
+                                  child: ListTile(
+                                    leading: product.image != null
+                                        ? ClipRRect(
+                                            borderRadius: BorderRadius.circular(10),
+                                            child: Image.network(
+                                              product.image!.startsWith('http')
+                                                  ? product.image!
+                                                  : product.image!.startsWith('/storage')
+                                                      ? '${Variables.baseUrl}${product.image!}'
+                                                      : '${Variables.imageBaseUrl}${product.image!}',
                                               width: 50,
                                               height: 50,
-                                              decoration: BoxDecoration(
-                                                borderRadius: BorderRadius.circular(10),
-                                                color: changeStringtoColor(product.color ?? ""),
-                                              ),
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (context, error, stackTrace) => Icon(Icons.broken_image),
                                             ),
-                                      title: Text(product.name ?? "", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-                                      subtitle: Text(
-                                        "Stock: ${stock?.quantity ?? 0}",
-                                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w400),
-                                      ),
-                                      trailing: Text(product.price!.currencyFormatRpV3, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+                                          )
+                                        : Container(
+                                            width: 50,
+                                            height: 50,
+                                            decoration: BoxDecoration(
+                                              borderRadius: BorderRadius.circular(10),
+                                              color: changeStringtoColor(product.color ?? ""),
+                                            ),
+                                          ),
+                                    title: Text(product.name ?? "", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+                                    subtitle: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          "Stock Gudang: ${stock?.quantity ?? 0}",
+                                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w400),
+                                        ),
+                                        const SpaceHeight(4),
+                                        StockController(
+                                          initialStock: stock?.quantity ?? 0,
+                                          onStockChanged: (newStock) {
+                                            // Implementasi logika update stock di sini
+                                            // Contoh:
+                                            // context.read<ProductBloc>().add(ProductEvent.updateStock(
+                                            //   productId: product.id!,
+                                            //   outletId: outletData?.id ?? 0,
+                                            //   newStock: newStock,
+                                            // ));
+                                          },
+                                          isEditable: true, // Atau false jika tidak boleh diubah
+                                        ),
+                                      ],
                                     ),
+                                    trailing: Text(product.price!.currencyFormatRpV3, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
                                   ),
                                 );
                               },
