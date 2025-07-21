@@ -39,21 +39,68 @@ class _DetailProductPageState extends State<DetailProductPage> {
         padding: const EdgeInsets.all(16),
         children: [
           widget.data.image != null
-              ? ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: Image.network(
-                    Variables.baseUrl + widget.data.image!,
-                    width: 100,
-                    height: 100,
-                    fit: BoxFit.cover,
+              ? Container(
+                  width: double.infinity,
+                  height: 200, // Tinggi yang lebih proporsional
+                  margin: const EdgeInsets.only(bottom: 16),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.network(
+                      // Fix: Gunakan logika yang sama seperti di HomePage
+                      widget.data.image!.startsWith('http')
+                          ? widget.data.image!
+                          : widget.data.image!.startsWith('/storage')
+                              ? '${Variables.baseUrl}${widget.data.image!}'
+                              : '${Variables.imageBaseUrl}${widget.data.image!}',
+                      width: double.infinity,
+                      height: 200,
+                      fit: BoxFit.contain, // Ubah ke contain agar tidak terpotong
+                      // Tambahkan error handling
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          width: double.infinity,
+                          height: 200,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(10),
+                            color: Colors.grey[300],
+                          ),
+                          child: const Icon(
+                            Icons.broken_image,
+                            size: 50,
+                            color: Colors.grey,
+                          ),
+                        );
+                      },
+                      // Tambahkan loading indicator
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Container(
+                          width: double.infinity,
+                          height: 200,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(10),
+                            color: Colors.grey[200],
+                          ),
+                          child: const Center(
+                            child: CircularProgressIndicator(),
+                          ),
+                        );
+                      },
+                    ),
                   ),
                 )
               : Container(
-                  width: 100,
-                  height: 100,
+                  width: double.infinity,
+                  height: 200,
+                  margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(10),
                     color: changeStringtoColor(widget.data.color ?? ''),
+                  ),
+                  child: const Icon(
+                    Icons.image,
+                    size: 80,
+                    color: Colors.white,
                   ),
                 ),
           ListTile(
