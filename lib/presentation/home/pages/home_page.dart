@@ -95,26 +95,37 @@ class _StockControllerState extends State<StockController> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        IconButton(
-          icon: const Icon(Icons.remove, size: 20),
-          onPressed: _quantity > 0
-              ? () => _updateQuantity(_quantity - 1)
-              : null,
-          style: IconButton.styleFrom(
-            backgroundColor: AppColors.primary.withOpacity(0.1),
-            padding: const EdgeInsets.all(4),
+        // Tombol minus dengan ukuran yang lebih kecil
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: AppColors.primary.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: IconButton(
+            icon: const Icon(Icons.remove, size: 16),
+            onPressed: _quantity > 0
+                ? () => _updateQuantity(_quantity - 1)
+                : null,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
           ),
         ),
-        const SpaceWidth(8),
-        SizedBox(
-          width: 60,
+        const SizedBox(width: 4), // Kurangi spacing
+        // TextField untuk input quantity dengan ukuran yang lebih kecil
+        Container(
+          width: 50, // Kurangi lebar dari 60 ke 50
+          height: 32,
           child: TextField(
             controller: _controller,
             textAlign: TextAlign.center,
             keyboardType: TextInputType.number,
+            style: const TextStyle(fontSize: 14), // Kurangi ukuran font
             decoration: const InputDecoration(
               border: OutlineInputBorder(),
-              contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+              contentPadding: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+              isDense: true, // Membuat TextField lebih kompak
             ),
             onChanged: (value) {
               final newQuantity = int.tryParse(value) ?? _quantity;
@@ -122,22 +133,28 @@ class _StockControllerState extends State<StockController> {
             },
           ),
         ),
-        const SpaceWidth(8),
-        IconButton(
-          icon: const Icon(Icons.add, size: 20),
-          onPressed: widget.stock > 0 && _quantity < widget.stock
-              ? () => _updateQuantity(_quantity + 1)
-              : null,
-          style: IconButton.styleFrom(
-            backgroundColor: AppColors.primary.withOpacity(0.1),
-            padding: const EdgeInsets.all(4),
+        const SizedBox(width: 4), // Kurangi spacing
+        // Tombol plus dengan ukuran yang lebih kecil
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: AppColors.primary.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: IconButton(
+            icon: const Icon(Icons.add, size: 16),
+            onPressed: widget.stock > 0 && _quantity < widget.stock
+                ? () => _updateQuantity(_quantity + 1)
+                : null,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
           ),
         ),
       ],
     );
   }
 }
-
 
 class _HomePageState extends State<HomePage> {
   double totalPayment = 0;
