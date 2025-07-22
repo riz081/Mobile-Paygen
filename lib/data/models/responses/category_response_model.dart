@@ -68,7 +68,14 @@ class Category {
       };
 
   @override
-  String toString() {
-    return '$name';
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is Category && other.id == id;
   }
+
+  @override
+  int get hashCode => id.hashCode;
+
+  @override
+  String toString() => name ?? 'Unknown';
 }

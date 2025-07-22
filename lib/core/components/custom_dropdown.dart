@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 import 'spaces.dart';
 
 class CustomDropdown<T> extends StatelessWidget {
@@ -7,6 +6,7 @@ class CustomDropdown<T> extends StatelessWidget {
   final List<T> items;
   final String label;
   final Function(T? value)? onChanged;
+  final String Function(T item)? itemToString;
 
   const CustomDropdown({
     super.key,
@@ -14,6 +14,7 @@ class CustomDropdown<T> extends StatelessWidget {
     required this.items,
     required this.label,
     this.onChanged,
+    this.itemToString,
   });
 
   @override
@@ -32,12 +33,17 @@ class CustomDropdown<T> extends StatelessWidget {
         DropdownButtonFormField<T>(
           value: value,
           onChanged: onChanged,
-          items: items.map((T item) {
-            return DropdownMenuItem<T>(
-              value: item,
-              child: Text(item.toString()),
-            );
-          }).toList(),
+          items: items
+              .map((T item) => DropdownMenuItem<T>(
+                    value: item,
+                    child: Text(
+                        itemToString != null ? itemToString!(item) : item.toString()),
+                  ))
+              .toList()
+              // Ensure unique values
+              .where((item) => item.value != null)
+              .toSet()
+              .toList(),
           decoration: InputDecoration(
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16.0),
@@ -48,6 +54,7 @@ class CustomDropdown<T> extends StatelessWidget {
               borderSide: const BorderSide(color: Colors.grey),
             ),
           ),
+          validator: (value) => value == null ? 'Pilih $label' : null,
         ),
       ],
     );

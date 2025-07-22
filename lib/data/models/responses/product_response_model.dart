@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter_jago_pos_app/data/models/responses/me_response_model.dart';
-
 import 'category_response_model.dart';
 
 class ProductResponseModel {
@@ -34,6 +33,7 @@ class Product {
   final String? name;
   final int? categoryId;
   final int? businessId;
+  final int? outletId; // Added outletId field
   final String? description;
   final String? image;
   final String? color;
@@ -52,6 +52,7 @@ class Product {
     this.name,
     this.categoryId,
     this.businessId,
+    this.outletId, // Made optional by removing 'required'
     this.description,
     this.image,
     this.color,
@@ -66,6 +67,22 @@ class Product {
     this.stocks,
   });
 
+  @override
+  String toString() {
+    return 'ProductModel{'
+        'name: $name, '
+        'categoryId: $categoryId, '
+        'price: $price, '
+        'cost: $cost, '
+        'stock: $stock, '
+        'color: $color, '
+        'barcode: $barcode, '
+        'businessId: $businessId, '
+        'description: $description, '
+        'outletId: $outletId'
+        '}';
+  }
+
   factory Product.fromJson(String str) => Product.fromMap(json.decode(str));
 
   String toJson() => json.encode(toMap());
@@ -79,6 +96,9 @@ class Product {
         businessId: json["business_id"] is int
             ? json["business_id"]
             : int.parse(json["business_id"]),
+        outletId: json["outlet_id"] is int
+            ? json["outlet_id"]
+            : int.tryParse(json["outlet_id"] ?? ""), // Handle outlet_id
         description: json["description"],
         image: json["image"],
         color: json["color"],
@@ -106,6 +126,7 @@ class Product {
         "name": name,
         "category_id": categoryId,
         "business_id": businessId,
+        "outlet_id": outletId, // Added outlet_id to map
         "description": description,
         "image": image,
         "color": color,

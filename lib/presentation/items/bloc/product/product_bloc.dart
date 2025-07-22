@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:bloc/bloc.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_jago_pos_app/presentation/items/models/product_model.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
@@ -42,27 +45,63 @@ class ProductBloc extends Bloc<ProductEvent, ProductState> {
 
     on<_EditProduct>((event, emit) async {
       emit(ProductState.loading());
+      debugPrint('Editing product with ID: ${event.id}');
+      debugPrint('Product data: ${event.product.toString()}');
+      
       final result = await productRemoteDataSource.editProduct(
         event.product,
         event.id,
       );
+      
       result.fold(
-        (l) => emit(_Error(l)),
-        (r) => add(_GetProducts()),
+        (l) {
+          debugPrint('Edit product failed: $l');
+          emit(_Error(l));
+        },
+        (r) {
+          debugPrint('Edit product success');
+          add(_GetProducts());
+        },
       );
     });
 
     on<_EditProductWithImage>((event, emit) async {
       emit(ProductState.loading());
-      final result = await productRemoteDataSource.editProductWithImage(
-        event.product,
-        event.image,
-        event.id,
-      );
-      result.fold(
-        (l) => emit(_Error(l)),
-        (r) => add(_GetProducts()),
-      );
+      try {
+        debugPrint('Editing product with image, ID: ${event.id}');
+        
+        // Verify image exists
+        final imageFile = File(event.image.path);
+        if (!await imageFile.exists()) {
+          throw Exception('File gambar tidak ditemukan');
+        }
+
+        // Verify image size
+        final fileSize = await imageFile.length();
+        if (fileSize > 5 * 1024 * 1024) { // 5MB
+          throw Exception('Ukuran gambar masih terlalu besar setelah kompresi');
+        }
+
+        final result = await productRemoteDataSource.editProductWithImage(
+          event.product,
+          event.image,
+          event.id,
+        );
+        
+        result.fold(
+          (l) {
+            debugPrint('Edit product with image failed: $l');
+            emit(_Error(l));
+          },
+          (r) {
+            debugPrint('Edit product with image success');
+            add(_GetProducts());
+          },
+        );
+      } catch (e) {
+        debugPrint('Error in editProductWithImage: $e');
+        emit(_Error(e.toString()));
+      }
     });
 
     on<_GetProducts>((event, emit) async {
