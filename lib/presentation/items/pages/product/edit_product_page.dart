@@ -259,7 +259,7 @@ class _EditProductPageState extends State<EditProductPage> {
               //upload image or pick image from gallery
               Row(
                 children: [
-                  //Container for image preview
+                  //Container for image preview                  
                   Container(
                     width: 100,
                     height: 100,
@@ -279,10 +279,47 @@ class _EditProductPageState extends State<EditProductPage> {
                             ? ClipRRect(
                                 borderRadius: BorderRadius.circular(10),
                                 child: Image.network(
-                                  '${Variables.baseUrl}${widget.data.image!}',
-                                  width: 50,
-                                  height: 50,
+                                  // Gunakan logika yang sama seperti di DetailProductPage
+                                  widget.data.image!.startsWith('http')
+                                      ? widget.data.image!
+                                      : widget.data.image!.startsWith('/storage')
+                                          ? '${Variables.baseUrl}${widget.data.image!}'
+                                          : '${Variables.imageBaseUrl}${widget.data.image!}',
+                                  width: 100,
+                                  height: 100,
                                   fit: BoxFit.cover,
+                                  // Tambahkan error handling
+                                  errorBuilder: (context, error, stackTrace) {
+                                    print('Error loading image: $error'); // Debug log
+                                    return Container(
+                                      width: 100,
+                                      height: 100,
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(10),
+                                        color: Colors.grey[300],
+                                      ),
+                                      child: const Icon(
+                                        Icons.broken_image,
+                                        size: 30,
+                                        color: Colors.grey,
+                                      ),
+                                    );
+                                  },
+                                  // Tambahkan loading indicator
+                                  loadingBuilder: (context, child, loadingProgress) {
+                                    if (loadingProgress == null) return child;
+                                    return Container(
+                                      width: 100,
+                                      height: 100,
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(10),
+                                        color: Colors.grey[200],
+                                      ),
+                                      child: const Center(
+                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                      ),
+                                    );
+                                  },
                                 ),
                               )
                             : Icon(
